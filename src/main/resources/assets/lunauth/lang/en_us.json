@@ -1,0 +1,9 @@
+{
+  "lunauth.welcome": "§6[LunAuth] §fWelcome to the server!",
+  "lunauth.register_prompt": "§fPlease use: §a/register <password>",
+  "lunauth.login_prompt": "§fPlease use: §a/login <password>",
+  "lunauth.already_registered": "§cYou are already registered! Use /login",
+  "lunauth.success_reg": "§aRegistration successful! Have a good game.",
+  "lunauth.wrong_pass": "§cWrong password!",
+  "lunauth.success_login": "§aYou have successfully logged in!"
+}

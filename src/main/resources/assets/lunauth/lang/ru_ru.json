@@ -1,0 +1,9 @@
+{
+  "lunauth.welcome": "§6[LunAuth] §fДобро пожаловать в O.S. TEAM!",
+  "lunauth.register_prompt": "§fПожалуйста, введите: §a/register <пароль>",
+  "lunauth.login_prompt": "§fПожалуйста, введите: §a/login <пароль>",
+  "lunauth.already_registered": "§cВы уже зарегистрированы! Используйте /login",
+  "lunauth.success_reg": "§aРегистрация успешна! Приятной игры.",
+  "lunauth.wrong_pass": "§cНеверный пароль!",
+  "lunauth.success_login": "§aВы успешно вошли!"
+}
