@@ -2,14 +2,15 @@ package osteam.lunauth;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -26,7 +27,6 @@ public class LunAuth {
     public static final Logger LOGGER = LogUtils.getLogger();
     public static final Set<UUID> authenticatedPlayers = new HashSet<>();
 
-    // Новые хранилища для безопасности
     private final Map<UUID, Long> joinTimes = new HashMap<>();
     private final Map<UUID, Integer> loginAttempts = new HashMap<>();
 
@@ -51,8 +51,6 @@ public class LunAuth {
     public void onPlayerJoin(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && !event.getLevel().isClientSide) {
             String name = player.getName().getString();
-
-            // Фиксируем время входа
             joinTimes.put(player.getUUID(), System.currentTimeMillis());
             loginAttempts.put(player.getUUID(), 0);
 
@@ -73,14 +71,42 @@ public class LunAuth {
         loginAttempts.remove(uuid);
     }
 
+    // --- БЛОКИРОВКА ЧАТА ---
+    @SubscribeEvent
+    public void onPlayerChat(ServerChatEvent event) {
+        ServerPlayer player = event.getPlayer();
+        if (!authenticatedPlayers.contains(player.getUUID())) {
+            player.sendSystemMessage(Component.literal("§cВы не можете писать в чат до авторизации!"));
+            event.setCanceled(true); // Сообщение не уйдет в чат
+        }
+    }
+
+    // --- ЗАЩИТА ОТ УРОНА (И БОЙЦОВСКИЙ БАН) ---
+    @SubscribeEvent
+    public void onPlayerDamage(LivingIncomingDamageEvent event) {
+        // Если урон получает неавторизованный игрок — отменяем
+        if (event.getEntity() instanceof ServerPlayer victim) {
+            if (!authenticatedPlayers.contains(victim.getUUID())) {
+                event.setCanceled(true);
+                return;
+            }
+        }
+
+        // Если урон ПЫТАЕТСЯ нанести неавторизованный игрок — тоже отменяем
+        if (event.getSource().getEntity() instanceof ServerPlayer attacker) {
+            if (!authenticatedPlayers.contains(attacker.getUUID())) {
+                attacker.sendSystemMessage(Component.literal("§cВы не можете наносить урон до авторизации!"));
+                event.setCanceled(true);
+            }
+        }
+    }
+
     @SubscribeEvent
     public void onPlayerTick(PlayerTickEvent.Pre event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             UUID uuid = serverPlayer.getUUID();
 
-
             if (!authenticatedPlayers.contains(uuid)) {
-                // ПРОВЕРКА ТАЙМЕРА
                 Long joinTime = joinTimes.get(uuid);
                 if (joinTime != null) {
                     long secondsPassed = (System.currentTimeMillis() - joinTime) / 1000;
@@ -90,7 +116,6 @@ public class LunAuth {
                     }
                 }
 
-                // Эффекты и заморозка
                 if (Config.USE_BLINDNESS.get()) {
                     serverPlayer.addEffect(new net.minecraft.world.effect.MobEffectInstance(
                             net.minecraft.world.effect.MobEffects.BLINDNESS, 60, 255, false, false));
@@ -113,7 +138,6 @@ public class LunAuth {
                             if (AuthStorage.isRegistered(player.getName().getString())) return 0;
 
                             AuthStorage.register(player.getName().getString(), StringArgumentType.getString(context, "password"));
-
                             authenticatedPlayers.add(uuid);
                             joinTimes.remove(uuid);
                             loginAttempts.remove(uuid);
