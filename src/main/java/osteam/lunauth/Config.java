@@ -5,7 +5,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
-    // секция настроек
+    // Секция настроек функций
     public static final ModConfigSpec.IntValue AUTH_TIMEOUT = BUILDER
             .comment("Время на авторизацию в секундах.")
             .defineInRange("features.auth_timeout", 60, 10, 300);
@@ -14,43 +14,49 @@ public class Config {
             .comment("Максимальное количество попыток ввода пароля.")
             .defineInRange("features.max_attempts", 3, 1, 10);
 
-    // Настройки локализации
-    public static final ModConfigSpec.ConfigValue<String> LANGUAGE = BUILDER
-            .comment("Server message language. Use 'en_us' or 'ru_ru'.")
-            .define("general.language", "en_us");
+    public static final ModConfigSpec.BooleanValue USE_BLINDNESS = BUILDER
+            .comment("Применять эффект слепоты к неавторизованным игрокам?")
+            .define("features.use_blindness", true);
 
-    // Секция сообщений
+    // Секция основных сообщений
     public static final ModConfigSpec.ConfigValue<String> WELCOME_MESSAGE = BUILDER
-            .comment("Entry message. Leave empty \"\" to use auto-translation.")
-            .define("messages.welcome", "§6[LunAuth] §fWelcome to the server!");
+            .define("messages.welcome", "§6[LunAuth] §fДобро пожаловать на сервер!");
 
     public static final ModConfigSpec.ConfigValue<String> REGISTER_PROMPT = BUILDER
-            .comment("Registration prompt.")
-            .define("messages.register_prompt", "§fPlease use: §a/register <password>");
+            .define("messages.register_prompt", "§fПожалуйста, используйте: §a/register <пароль>");
 
     public static final ModConfigSpec.ConfigValue<String> LOGIN_PROMPT = BUILDER
-            .comment("Login prompt.")
-            .define("messages.login_prompt", "§fPlease use: §a/login <password>");
+            .define("messages.login_prompt", "§fПожалуйста, используйте: §a/login <пароль>");
 
     public static final ModConfigSpec.ConfigValue<String> SUCCESS_REG = BUILDER
-            .comment("Message after successful registration.")
-            .define("messages.success_reg", "§aYou have successfully registered!");
+            .define("messages.success_reg", "§aВы успешно зарегистрировались!");
 
     public static final ModConfigSpec.ConfigValue<String> SUCCESS_LOGIN = BUILDER
-            .comment("Message after successful login.")
-            .define("messages.success_login", "§aYou have successfully logged in!");
+            .define("messages.success_login", "§aВы успешно вошли в систему!");
 
     public static final ModConfigSpec.ConfigValue<String> WRONG_PASS = BUILDER
-            .comment("Wrong password message.")
-            .define("messages.wrong_password", "§cIncorrect password!");
+            .comment("Сообщение о неверном пароле. {attempts} и {max} заменятся на числа.")
+            .define("messages.wrong_password", "§cНеверный пароль! Попыток: {attempts}/{max}");
 
     public static final ModConfigSpec.ConfigValue<String> ALREADY_REGISTERED = BUILDER
-            .comment("Message if player is already registered.")
-            .define("messages.already_registered", "§cYou are already registered!");
+            .define("messages.already_registered", "§cВы уже зарегистрированы!");
 
-    public static final ModConfigSpec.BooleanValue USE_BLINDNESS = BUILDER
-            .comment("Apply blindness to unauthenticated players?")
-            .define("features.use_blindness", true);
+    // Секция блокировок
+    public static final ModConfigSpec.ConfigValue<String> NO_CHAT = BUILDER
+            .define("messages.no_chat", "§cВы не можете писать в чат до авторизации!");
+
+    public static final ModConfigSpec.ConfigValue<String> NO_DROP = BUILDER
+            .define("messages.no_drop", "§cВы не можете выбрасывать предметы до авторизации!");
+
+    public static final ModConfigSpec.ConfigValue<String> NO_DAMAGE = BUILDER
+            .define("messages.no_damage", "§cВы не можете наносить урон до авторизации!");
+
+    // Секция киков
+    public static final ModConfigSpec.ConfigValue<String> TIMEOUT_KICK = BUILDER
+            .define("messages.timeout_kick", "§cВремя на авторизацию истекло!");
+
+    public static final ModConfigSpec.ConfigValue<String> TOO_MANY_ATTEMPTS = BUILDER
+            .define("messages.too_many_attempts", "§cСлишком много неудачных попыток!");
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 }

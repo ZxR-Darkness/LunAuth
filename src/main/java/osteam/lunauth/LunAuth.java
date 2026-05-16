@@ -10,7 +10,10 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.item.ItemTossEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -42,23 +45,27 @@ public class LunAuth {
         LOGGER.info("LunAuth: Система защиты O.S. TEAM запущена!");
     }
 
-    private Component getAuthMessage(String key, String configValue) {
-        if (configValue != null && !configValue.isEmpty()) return Component.literal(configValue);
-        return Component.translatable(key);
+    // Универсальный метод для получения сообщений из конфига
+    private Component getAuthMessage(String configValue) {
+        return Component.literal(configValue);
     }
 
     @SubscribeEvent
     public void onPlayerJoin(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && !event.getLevel().isClientSide) {
+            if (authenticatedPlayers.contains(player.getUUID())) {
+                return;
+            }
+
             String name = player.getName().getString();
             joinTimes.put(player.getUUID(), System.currentTimeMillis());
             loginAttempts.put(player.getUUID(), 0);
 
-            player.sendSystemMessage(getAuthMessage("lunauth.welcome", Config.WELCOME_MESSAGE.get()));
+            player.sendSystemMessage(getAuthMessage(Config.WELCOME_MESSAGE.get()));
             if (AuthStorage.isRegistered(name)) {
-                player.sendSystemMessage(getAuthMessage("lunauth.login_prompt", Config.LOGIN_PROMPT.get()));
+                player.sendSystemMessage(getAuthMessage(Config.LOGIN_PROMPT.get()));
             } else {
-                player.sendSystemMessage(getAuthMessage("lunauth.register_prompt", Config.REGISTER_PROMPT.get()));
+                player.sendSystemMessage(getAuthMessage(Config.REGISTER_PROMPT.get()));
             }
         }
     }
@@ -71,20 +78,44 @@ public class LunAuth {
         loginAttempts.remove(uuid);
     }
 
-    // --- БЛОКИРОВКА ЧАТА ---
     @SubscribeEvent
     public void onPlayerChat(ServerChatEvent event) {
         ServerPlayer player = event.getPlayer();
         if (!authenticatedPlayers.contains(player.getUUID())) {
-            player.sendSystemMessage(Component.literal("§cВы не можете писать в чат до авторизации!"));
-            event.setCanceled(true); // Сообщение не уйдет в чат
+            player.sendSystemMessage(getAuthMessage(Config.NO_CHAT.get()));
+            event.setCanceled(true);
         }
     }
 
-    // --- ЗАЩИТА ОТ УРОНА (И БОЙЦОВСКИЙ БАН) ---
+    @SubscribeEvent
+    public void onItemToss(ItemTossEvent event) {
+        if (event.getPlayer() instanceof ServerPlayer player) {
+            if (!authenticatedPlayers.contains(player.getUUID())) {
+                player.getInventory().add(event.getEntity().getItem());
+                player.sendSystemMessage(getAuthMessage(Config.NO_DROP.get()));
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void onContainerOpen(PlayerContainerEvent.Open event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            if (!authenticatedPlayers.contains(player.getUUID())) {
+                player.closeContainer();
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (!authenticatedPlayers.contains(event.getEntity().getUUID())) {
+            event.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent
     public void onPlayerDamage(LivingIncomingDamageEvent event) {
-        // Если урон получает неавторизованный игрок — отменяем
         if (event.getEntity() instanceof ServerPlayer victim) {
             if (!authenticatedPlayers.contains(victim.getUUID())) {
                 event.setCanceled(true);
@@ -92,10 +123,9 @@ public class LunAuth {
             }
         }
 
-        // Если урон ПЫТАЕТСЯ нанести неавторизованный игрок — тоже отменяем
         if (event.getSource().getEntity() instanceof ServerPlayer attacker) {
             if (!authenticatedPlayers.contains(attacker.getUUID())) {
-                attacker.sendSystemMessage(Component.literal("§cВы не можете наносить урон до авторизации!"));
+                attacker.sendSystemMessage(getAuthMessage(Config.NO_DAMAGE.get()));
                 event.setCanceled(true);
             }
         }
@@ -111,7 +141,7 @@ public class LunAuth {
                 if (joinTime != null) {
                     long secondsPassed = (System.currentTimeMillis() - joinTime) / 1000;
                     if (secondsPassed > Config.AUTH_TIMEOUT.get()) {
-                        serverPlayer.connection.disconnect(Component.literal("§cВремя на авторизацию истекло!"));
+                        serverPlayer.connection.disconnect(getAuthMessage(Config.TIMEOUT_KICK.get()));
                         return;
                     }
                 }
@@ -135,14 +165,17 @@ public class LunAuth {
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             UUID uuid = player.getUUID();
-                            if (AuthStorage.isRegistered(player.getName().getString())) return 0;
+                            if (AuthStorage.isRegistered(player.getName().getString())) {
+                                context.getSource().sendFailure(getAuthMessage(Config.ALREADY_REGISTERED.get()));
+                                return 0;
+                            }
 
                             AuthStorage.register(player.getName().getString(), StringArgumentType.getString(context, "password"));
                             authenticatedPlayers.add(uuid);
                             joinTimes.remove(uuid);
                             loginAttempts.remove(uuid);
 
-                            context.getSource().sendSuccess(() -> getAuthMessage("lunauth.success_reg", Config.SUCCESS_REG.get()), false);
+                            context.getSource().sendSuccess(() -> getAuthMessage(Config.SUCCESS_REG.get()), false);
                             return 1;
                         })));
 
@@ -158,15 +191,16 @@ public class LunAuth {
                                 joinTimes.remove(uuid);
                                 loginAttempts.remove(uuid);
 
-                                context.getSource().sendSuccess(() -> getAuthMessage("lunauth.success_login", Config.SUCCESS_LOGIN.get()), false);
+                                context.getSource().sendSuccess(() -> getAuthMessage(Config.SUCCESS_LOGIN.get()), false);
                                 return 1;
                             } else {
                                 int attempts = loginAttempts.getOrDefault(uuid, 0) + 1;
                                 if (attempts >= Config.MAX_ATTEMPTS.get()) {
-                                    player.connection.disconnect(Component.literal("§cСлишком много неудачных попыток!"));
+                                    player.connection.disconnect(getAuthMessage(Config.TOO_MANY_ATTEMPTS.get()));
                                 } else {
                                     loginAttempts.put(uuid, attempts);
-                                    context.getSource().sendFailure(Component.literal("§cНеверный пароль! Попыток: " + attempts + "/" + Config.MAX_ATTEMPTS.get()));
+                                    String msg = Config.WRONG_PASS.get().replace("{attempts}", String.valueOf(attempts)).replace("{max}", String.valueOf(Config.MAX_ATTEMPTS.get()));
+                                    context.getSource().sendFailure(getAuthMessage(msg));
                                 }
                                 return 0;
                             }
